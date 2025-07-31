@@ -43,20 +43,50 @@ public class VehicleSplineWalker : MonoBehaviour
     private void RotateVehicle(RideEvent currentEvent, float3 tan, float3 up)
     {
         Quaternion targetRotation = Quaternion.LookRotation(tan, up);
-
         if(currentEvent.overrideRotation)
         {
-            if(currentEvent.target != null)
+            int count = currentEvent.targets.Count;
+
+            if(count > 0)
             {
-                Vector3 dir = (currentEvent.target.position - transform.position).normalized;
-                targetRotation = Quaternion.LookRotation(dir, up);
+                float normalizedT = Mathf.InverseLerp(currentEvent.startTime, currentEvent.endTime, m_splineTime);
+
+                if(count == 1)
+                {
+                    Vector3 dir = (currentEvent.targets[0].position - transform.position).normalized;
+                    dir.y = 0f;
+                    if (dir.sqrMagnitude > 0.0001f) dir.Normalize();
+                    targetRotation = Quaternion.LookRotation(dir, Vector3.up);
+                }
+                else
+                {
+                    float scaledT = normalizedT * (count - 1);
+                    int index = Mathf.FloorToInt(scaledT);
+                    int nextIndex = Mathf.Min(index + 1, count - 1);
+                    float lerpT = scaledT - index;
+
+                    Vector3 startDir = (currentEvent.targets[index].position - transform.position).normalized;
+                    Vector3 endDir = (currentEvent.targets[nextIndex].position - transform.position).normalized;
+
+                    startDir.y = 0f;
+                  
+                    endDir.y = 0f;
+                    
+                    startDir.Normalize();
+                    endDir.Normalize();
+
+                    Quaternion startRot = Quaternion.LookRotation(startDir, Vector3.up);
+                    Quaternion endRot = Quaternion.LookRotation(endDir, Vector3.up);
+
+                    targetRotation = Quaternion.Slerp(startRot, endRot, lerpT);
+                }
             }
             else
             {
                 targetRotation = Quaternion.Euler(currentEvent.customRotation);
             }
         }
-        
+
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSmoothness);
     }
 
@@ -95,10 +125,24 @@ public class VehicleSplineWalker : MonoBehaviour
             Gizmos.DrawSphere(end, .2f);
             Gizmos.DrawLine(start, end);
 
-            if(rideEvent.overrideRotation && rideEvent.target != null)
+            if(rideEvent.overrideRotation && rideEvent.targets.Count > 0)
             {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawLine((Vector3) start, rideEvent.target.position);
+                for (int i = 0; i < rideEvent.targets.Count; i++)
+                {
+                    Transform target = rideEvent.targets[i];
+                    if (target == null) continue;
+
+                    Gizmos.color = Color.yellow;
+                    Gizmos.DrawLine((Vector3)start, target.position);
+                    Gizmos.DrawSphere(target.position, 0.2f);
+
+                    if (i < rideEvent.targets.Count - 1)
+                    {
+                        // Draw a small connector between look targets to show order
+                        Gizmos.color = Color.cyan;
+                        Gizmos.DrawLine(rideEvent.targets[i].position, rideEvent.targets[i + 1].position);
+                    }
+                }
             }
         }
     }
