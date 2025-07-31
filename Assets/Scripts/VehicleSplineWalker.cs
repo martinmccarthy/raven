@@ -1,74 +1,105 @@
+using System.Collections;
+using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Splines;
 
-[RequireComponent(typeof(Transform))]
 public class VehicleSplineWalker : MonoBehaviour
 {
-    [Tooltip("Reference to the SplineContainer in the scene")]
-    public SplineContainer splineContainer;
+    [SerializeField] private SplineContainer m_splineContainer;
+    [SerializeField] private List<RideEvent> rideEvents = new();
+    [SerializeField, Range(0f, 1f)] private float m_splineTime;
+    [SerializeField] private float rotationSmoothness = 10f;
 
-    [Tooltip("Duration in seconds to travel the entire path")]
-    public float travelTime = 10f;
+    private int currentEventIndex = 0;
+    private bool isPaused = false;
 
-    [Tooltip("Should the movement loop?")]
-    public bool loop = true;
 
-    // Optional offset to apply to spline positions
-    public float3 offset = new float3(-15.85136f, 1f, -17.99869f);
-
-    void Start()
+    private void Start()
     {
-        if (splineContainer == null)
+        if(rideEvents.Count > 0)
         {
-            Debug.LogError("VehicleSplineWalker: Assign a SplineContainer.");
-            return;
+            m_splineTime = rideEvents[0].startTime;
         }
+    }
 
-        var spline = splineContainer.Spline;
-        int count = spline.Count;
-        if (count < 2)
+    private void Update()
+    {
+        if(isPaused || rideEvents.Count == 0 || currentEventIndex >= rideEvents.Count) return;
+
+        RideEvent currentEvent = rideEvents[currentEventIndex];
+        m_splineTime += currentEvent.speed * Time.deltaTime;
+        m_splineTime = Mathf.Clamp01(m_splineTime);
+
+        if (m_splineTime >= currentEvent.endTime)
+            AdvanceEvent();
+
+        m_splineContainer.Evaluate(m_splineTime, out float3 pos, out float3 tan, out float3 up);
+        transform.position = pos;
+
+        RotateVehicle(currentEvent, tan, up);
+    }
+
+    private void RotateVehicle(RideEvent currentEvent, float3 tan, float3 up)
+    {
+        Quaternion targetRotation = Quaternion.LookRotation(tan, up);
+
+        if(currentEvent.overrideRotation)
         {
-            Debug.LogError("VehicleSplineWalker: Spline needs at least 2 points.");
-            return;
+            if(currentEvent.target != null)
+            {
+                Vector3 dir = (currentEvent.target.position - transform.position).normalized;
+                targetRotation = Quaternion.LookRotation(dir, up);
+            }
+            else
+            {
+                targetRotation = Quaternion.Euler(currentEvent.customRotation);
+            }
         }
+        
+        transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSmoothness);
+    }
 
-        // Build point array with offset
-        Vector3[] pts = new Vector3[count];
-        for (int i = 0; i < count; i++)
-            pts[i] = spline[i].Position + offset;
+    private void AdvanceEvent()
+    {
+        currentEventIndex++;
+        if(currentEventIndex < rideEvents.Count)
+        {
+            RideEvent next = rideEvents[currentEventIndex];
 
-        // Place at start and face first segment
-        transform.position = pts[0];
-        transform.rotation = Quaternion.LookRotation((pts[1] - pts[0]).normalized, Vector3.up);
+            if(next.pauseAtStart)
+            {
+                StartCoroutine(PauseRoutine(next.pauseDuration));
+            }
+        }
+    }
 
-        // Split path into two segments for demonstration
-        int mid = count / 2;
-        Vector3[] pts1 = new Vector3[mid + 1];
-        Vector3[] pts2 = new Vector3[count - mid];
-        for (int i = 0; i <= mid; i++) pts1[i] = pts[i];
-        for (int i = mid; i < count; i++) pts2[i - mid] = pts[i];
+    private IEnumerator PauseRoutine(float duration)
+    {
+        isPaused = true;
+        yield return new WaitForSeconds(duration);
+        isPaused = false;
+    }
 
-        float time1 = travelTime * 0.4f;
-        float time2 = travelTime * 0.6f;
+    private void OnDrawGizmos()
+    {
+        if (m_splineContainer == null || rideEvents == null) return;
 
-        // Sequence: move first segment, spin, then move second segment
-        var seq = LeanTween.sequence();
+        foreach(RideEvent rideEvent in rideEvents)
+        {
+            m_splineContainer.Evaluate(rideEvent.startTime, out float3 start, out _, out _);
+            m_splineContainer.Evaluate(rideEvent.endTime, out float3 end, out _, out _ );
 
-        // 1) Move along first half with ease-in
-        seq.append(
-            LeanTween.moveSpline(gameObject, pts1, time1)
-                     .setOrientToPath(true)
-        );
+            Gizmos.color = Color.green;
+            Gizmos.DrawSphere(start, .2f);
+            Gizmos.DrawSphere(end, .2f);
+            Gizmos.DrawLine(start, end);
 
-        seq.append(
-            LeanTween.rotate(gameObject, new Vector3(0f, 360f, 0f), time1)
-        );
-
-        // 3) Move along second half with ease-out
-        seq.append(
-            LeanTween.moveSpline(gameObject, pts2, time2)
-                     .setOrientToPath(true)
-        );
+            if(rideEvent.overrideRotation && rideEvent.target != null)
+            {
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawLine((Vector3) start, rideEvent.target.position);
+            }
+        }
     }
 }
