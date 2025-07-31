@@ -68,12 +68,10 @@ public class VehicleSplineWalker : MonoBehaviour
                     Vector3 startDir = (currentEvent.targets[index].position - transform.position).normalized;
                     Vector3 endDir = (currentEvent.targets[nextIndex].position - transform.position).normalized;
 
-                    if(!(index == count - 1))
-                    {
-                        Debug.Log("made it to this shit");
-                        startDir.y = 0f;
-                        endDir.y = 0f;
-                    }
+                    startDir.y = 0f;
+                  
+                    endDir.y = 0f;
+                    
                     startDir.Normalize();
                     endDir.Normalize();
 
