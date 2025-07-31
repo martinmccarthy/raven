@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Splines;
 
 public class VehicleSplineWalker : MonoBehaviour
@@ -11,9 +12,17 @@ public class VehicleSplineWalker : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float m_splineTime;
     [SerializeField] private float rotationSmoothness = 10f;
 
+    [SerializeField] private InputActionReference m_pauseButton;
+    [SerializeField] private InputActionReference m_restartButton;
+
     private int currentEventIndex = 0;
     private bool isPaused = false;
 
+    private void OnEnable()
+    {
+        m_pauseButton.action.performed += OnPausePerformed;
+        m_restartButton.action.performed += OnRestartPerformed;
+    }
 
     private void Start()
     {
@@ -145,5 +154,17 @@ public class VehicleSplineWalker : MonoBehaviour
                 }
             }
         }
+    }
+
+
+    private void OnPausePerformed(InputAction.CallbackContext context)
+    {
+        isPaused = !isPaused;
+    }
+
+    private void OnRestartPerformed(InputAction.CallbackContext context)
+    {
+        currentEventIndex = 0;
+        isPaused = false;
     }
 }
