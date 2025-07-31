@@ -26174,7 +26174,7 @@ MonoBehaviour:
     customRotation: {x: 0, y: 0, z: 0}
   - startTime: 0.607
     endTime: 0.721
-    speed: 0.05
+    speed: 0.02
     pauseAtStart: 0
     pauseDuration: 10
     overrideRotation: 1
